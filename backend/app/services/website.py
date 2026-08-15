@@ -114,3 +114,44 @@ def fetch_website(url: str, timeout: float = 10.0) -> dict:
     result["phones"] = sorted(phones)
     result["socials"] = socials
     return result
+
+
+def check_website(url: str, timeout: float = 8.0) -> dict:
+    """Lightweight reachability check for a business website.
+
+    Unlike :func:`fetch_website` (which crawls pages and aggregates contact
+    points and silently returns empty for a dead site), this returns an
+    explicit reachability verdict so the agent can tell a down/JS-only/blocked
+    site apart from a live one that simply has no contact info.
+
+    Returns ``{"url", "reachable", "status", "final_url", "title", "error"}``.
+    ``reachable`` is True only for HTTP 200 with an HTML content type.
+    """
+    result: dict = {
+        "url": url,
+        "reachable": False,
+        "status": None,
+        "final_url": url,
+        "title": "",
+        "error": None,
+    }
+    if not url:
+        return result
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    result["url"] = url
+
+    with httpx.Client(timeout=timeout, follow_redirects=True, headers=_HEADERS) as client:
+        try:
+            resp = client.get(url)
+            html = resp.text if resp.status_code == 200 else ""
+        except httpx.HTTPError as exc:
+            result["error"] = type(exc).__name__
+            return result
+
+    result["status"] = resp.status_code
+    result["final_url"] = str(resp.url)
+    if resp.status_code == 200 and "text/html" in resp.headers.get("content-type", ""):
+        result["reachable"] = True
+        result["title"] = extract_contacts(html)["title"]
+    return result

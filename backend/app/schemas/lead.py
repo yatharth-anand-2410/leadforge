@@ -26,6 +26,8 @@ class LeadOut(BaseModel):
     source_id: str | None
     score: float
     score_breakdown: dict
+    fit_score: float | None
+    fit_reason: str | None
     verified: bool
     verified_method: str | None
     status: str

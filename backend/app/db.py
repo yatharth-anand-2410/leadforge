@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import settings
@@ -36,6 +36,26 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 class Base(DeclarativeBase):
     pass
+
+
+# Columns added to `leads` after the first release. Schemas are created with
+# ``create_all`` (no alembic), so an existing dev DB needs these portable ALTERs.
+_LEAD_ADDITIONS = {
+    "fit_score": "FLOAT",
+    "fit_reason": "VARCHAR(1000)",
+}
+
+
+def ensure_lead_columns() -> None:
+    """Idempotently add post-release columns to the ``leads`` table."""
+    if "leads" not in inspect(engine).get_table_names():
+        Base.metadata.create_all(bind=engine)
+        return
+    existing = {col["name"] for col in inspect(engine).get_columns("leads")}
+    with engine.begin() as conn:
+        for name, coltype in _LEAD_ADDITIONS.items():
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE leads ADD COLUMN {name} {coltype}"))
 
 
 def get_db():

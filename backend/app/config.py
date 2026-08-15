@@ -9,8 +9,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # LLM
+    # Which chat model backend the discovery agent uses. One of:
+    #   groq | gemini | opencode-openai | opencode-anthropic
+    llm_provider: str = "groq"
+    llm_model: str = "llama-3.1-8b-instant"
     groq_api_key: str = ""
-    llm_model: str = "llama-3.3-70b-versatile"
+    gemini_api_key: str = ""  # native Gemini API (Google AI Studio)
+    opencode_api_key: str = ""  # OpenCode Go; shared by both opencode styles
+    opencode_base_url: str = "https://opencode.ai/zen/go/v1"
 
     # Database
     database_url: str = "sqlite:///./leadforge.db"
@@ -28,9 +34,17 @@ class Settings(BaseSettings):
     # Web
     cors_origins: str = "http://localhost:3000"
 
-    # Agent limits
-    max_agent_iterations: int = 60
+    # Agent limits. 80 gives headroom for a legitimate 5-category sweep now that
+    # loop guards (re-search nudge, fetch cache) stop the agent from burning
+    # turns re-doing the same work.
+    max_agent_iterations: int = 80
     job_timeout_seconds: int = 900
+
+    # Observability (LangSmith)
+    langsmith_tracing: bool = False
+    langsmith_api_key: str = ""
+    langsmith_project: str = "leadforge"
+    langsmith_endpoint: str = ""  # optional; empty = LangSmith SaaS (US)
 
 
 @lru_cache

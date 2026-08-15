@@ -53,6 +53,20 @@ _MIN_INTERVAL = 1.1  # seconds between Overpass requests (public API politeness)
 _last_call = 0.0
 _lock = threading.Lock()
 
+# The public overpass-api.de endpoint is a shared pool and routinely returns
+# transient 504/5xx/429 responses or drops connections. Retry those instead of
+# letting a single flaky search kill the whole agent run.
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = (1.0, 2.0, 4.0)  # seconds to wait before retry attempt N
+
+
+def _retry_delay(attempt: int, retry_after: str | None = None) -> float:
+    """Backoff for retry `attempt` (0-indexed); honors a server Retry-After header."""
+    if retry_after and retry_after.isdigit():
+        return min(int(retry_after), 10.0)
+    return _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
+
 
 def _throttle() -> None:
     global _last_call
@@ -71,6 +85,11 @@ def category_to_tags(category: str) -> dict[str, str] | None:
     return None
 
 
+def supported_categories() -> str:
+    """Human-readable list of categories that map to an OSM tag."""
+    return ", ".join(sorted(CATEGORY_TAGS.keys()))
+
+
 def build_query(tags: dict[str, str], bbox: tuple[float, float, float, float], timeout: int = 25) -> str:
     """Build an Overpass QL query for tags within a (south, west, north, east) bbox."""
     south, west, north, east = bbox
@@ -87,20 +106,40 @@ def build_query(tags: dict[str, str], bbox: tuple[float, float, float, float], t
 
 
 def _post_overpass(query: str, client: httpx.Client | None = None) -> dict:
-    _throttle()
+    """POST a query to Overpass, retrying transient failures (5xx/429/network) with backoff.
+
+    Non-retryable 4xx errors raise immediately; retryable statuses and transport
+    errors are retried up to ``_MAX_RETRIES`` times before raising.
+    """
     owns = client is None
     c = client or httpx.Client(timeout=30.0)
     try:
-        resp = c.post(
-            settings.overpass_endpoint,
-            data={"data": query},
-            headers={"User-Agent": settings.nominatim_user_agent},
-        )
-        resp.raise_for_status()
-        return resp.json()
+        for attempt in range(_MAX_RETRIES + 1):
+            _throttle()
+            try:
+                resp = c.post(
+                    settings.overpass_endpoint,
+                    data={"data": query},
+                    headers={"User-Agent": settings.nominatim_user_agent},
+                )
+            except httpx.HTTPError:
+                if attempt >= _MAX_RETRIES:
+                    raise
+                time.sleep(_retry_delay(attempt))
+                continue
+
+            if resp.status_code in _RETRYABLE_STATUS:
+                if attempt >= _MAX_RETRIES:
+                    resp.raise_for_status()
+                time.sleep(_retry_delay(attempt, resp.headers.get("Retry-After")))
+                continue
+
+            resp.raise_for_status()
+            return resp.json()
     finally:
         if owns:
             c.close()
+    raise AssertionError("unreachable")  # every attempt either returns or raises
 
 
 def _parse_elements(data: dict, category: str, limit: int) -> list[dict]:

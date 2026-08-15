@@ -137,6 +137,8 @@ export interface Lead {
   source_id: string | null;
   score: number;
   score_breakdown: Record<string, unknown>;
+  fit_score: number | null;
+  fit_reason: string | null;
   verified: boolean;
   verified_method: string | null;
   status: string;

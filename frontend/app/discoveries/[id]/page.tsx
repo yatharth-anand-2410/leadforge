@@ -135,7 +135,7 @@ export default function DiscoveryDetailPage() {
         </div>
 
         <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500">
                 <th className="px-4 py-3 font-medium">Name</th>
@@ -144,13 +144,14 @@ export default function DiscoveryDetailPage() {
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Phone</th>
                 <th className="px-4 py-3 font-medium">Score</th>
+                <th className="px-4 py-3 font-medium">Why it fits</th>
                 <th className="px-4 py-3 font-medium">Verified</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {!leads || leads.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-zinc-400">
+                  <td colSpan={8} className="px-4 py-10 text-center text-zinc-400">
                     {latest?.status === "running"
                       ? "Discovering leads…"
                       : "No leads yet."}
@@ -203,6 +204,20 @@ function LeadRow({ lead }: { lead: Lead }) {
       <td className="px-4 py-3 text-zinc-600">{lead.phone ?? "—"}</td>
       <td className="px-4 py-3 font-medium text-zinc-900">
         {Math.round(lead.score)}
+      </td>
+      <td className="px-4 py-3 max-w-sm">
+        {lead.fit_reason ? (
+          <div>
+            <div className="text-zinc-600">{lead.fit_reason}</div>
+            {typeof lead.fit_score === "number" && (
+              <div className="mt-0.5 text-xs text-zinc-400">
+                ICP fit {lead.fit_score}/50
+              </div>
+            )}
+          </div>
+        ) : (
+          "—"
+        )}
       </td>
       <td className="px-4 py-3">
         {lead.verified ? (

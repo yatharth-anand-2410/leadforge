@@ -1,6 +1,6 @@
 # Lead Forge
 
-A lead-generation engine. Define an ICP (business category, location, industry, size, roles, keywords) and a background **deep agent** (LangChain `deepagents` on Groq) discovers real businesses, crawls their websites, extracts and verifies contact points, deduplicates, scores, and returns a shortlist of qualified leads.
+A lead-generation engine. Define an ICP (business category, location, industry, size, roles, keywords) and a background **deep agent** (LangChain `deepagents`, with a configurable Groq / Gemini / OpenCode Go backend) discovers real businesses, crawls their websites, extracts and verifies contact points, deduplicates, scores, and returns a shortlist of qualified leads.
 
 ## Stack (monorepo)
 
@@ -10,7 +10,7 @@ A lead-generation engine. Define an ICP (business category, location, industry, 
 | Backend          | FastAPI + Python (managed with `uv`)              |
 | Database         | SQLite (data **and** job queue)                   |
 | Background jobs  | Standalone worker polling a `jobs` table          |
-| Agent            | LangChain `deepagents` + Groq (free tier)         |
+| Agent            | LangChain `deepagents` + Groq / Gemini / OpenCode Go |
 | Data sources     | Overpass/OSM, Nominatim, company website crawl, DNS (MX) |
 
 ## Layout
@@ -29,7 +29,7 @@ make install            # uv sync --extra dev
 
 # 2. Configure
 cp backend/.env.example backend/.env
-#    set GROQ_API_KEY (required for the agent) and JWT_SECRET
+#    set the LLM key for your LLM_PROVIDER (e.g. GROQ_API_KEY) and JWT_SECRET
 
 # 3. Frontend deps
 cd frontend && npm install && cd ..
@@ -66,6 +66,13 @@ Business data is sourced from OpenStreetMap; the UI attributes
 ## Notes
 
 - A single worker process is expected; the SQLite queue uses optimistic row-claiming.
-- The agent requires `GROQ_API_KEY`. Without it, jobs will fail with an API-key error.
+- The agent's chat backend is selected by `LLM_PROVIDER` (default `groq`; also
+  `gemini`, `opencode-openai`, `opencode-anthropic`). Each provider needs its key:
+  `GROQ_API_KEY`, `GEMINI_API_KEY` (Google AI Studio), or `OPENCODE_API_KEY`
+  (OpenCode Go). Without the key for the configured provider, jobs fail with an
+  API-key error. `LLM_MODEL` is the provider-specific model id (e.g.
+  `openai/gpt-oss-20b`, `gemini-2.5-flash`, `deepseek-v4-pro`, `qwen3.7-plus`).
+- Set `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` to trace each job's agent run to LangSmith
+  (project `leadforge`), tagged with `discovery_id` / `job_id` / `user_id`.
 - V1 discovers physical businesses via OSM; pure-digital/SaaS lead discovery (web search,
   Common Crawl, registries) is out of scope for now.

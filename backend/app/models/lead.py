@@ -31,6 +31,8 @@ class Lead(Base):
 
     score: Mapped[float] = mapped_column(default=0.0, nullable=False)
     score_breakdown: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    fit_score: Mapped[float | None] = mapped_column(nullable=True)
+    fit_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     verified: Mapped[bool] = mapped_column(default=False, nullable=False)
     verified_method: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="shortlisted", index=True, nullable=False)

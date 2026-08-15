@@ -14,7 +14,11 @@ dependencies = [
     "dnspython>=2.6",
     "deepagents>=0.1",
     "langchain-groq>=0.2",
+    "langchain-google-genai>=2.0",
+    "langchain-openai>=0.2",
+    "langchain-anthropic>=0.3",
     "langchain-core>=0.3",
+    "langsmith>=0.3",
     "python-jose[cryptography]>=3.3",
     "bcrypt>=4.1",
     "python-multipart>=0.0.9",
@@ -25,6 +29,7 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
+    "watchfiles>=1.0",
 ]
 
 [tool.uv]
