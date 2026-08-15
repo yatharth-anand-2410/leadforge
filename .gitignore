@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.db
+*.db-wal
+*.db-shm
+.pytest_cache/
+.ruff_cache/
+.env
+
+# Node
+node_modules/
+.next/
+out/
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+
+# Misc
+.DS_Store
+*.log

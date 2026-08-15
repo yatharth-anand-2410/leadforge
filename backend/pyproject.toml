@@ -1,0 +1,35 @@
+[project]
+name = "leadforge-backend"
+version = "0.1.0"
+description = "Lead Forge backend API"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "dnspython>=2.6",
+    "deepagents>=0.1",
+    "langchain-groq>=0.2",
+    "langchain-core>=0.3",
+    "python-jose[cryptography]>=3.3",
+    "bcrypt>=4.1",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
