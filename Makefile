@@ -1,4 +1,4 @@
-.PHONY: install api worker worker-dev web test
+.PHONY: install api worker worker-dev web test searxng
 
 install:
 	cd backend && uv sync --extra dev
@@ -14,6 +14,9 @@ worker-dev:
 
 web:
 	cd frontend && npm run dev
+
+searxng:
+	docker compose up -d searxng
 
 test:
 	cd backend && uv run pytest

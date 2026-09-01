@@ -135,23 +135,24 @@ export default function DiscoveryDetailPage() {
         </div>
 
         <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-          <table className="w-full min-w-[980px] text-sm">
+          <table className="w-full min-w-[1200px] text-sm">
             <thead>
               <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Location</th>
-                <th className="px-4 py-3 font-medium">Website</th>
-                <th className="px-4 py-3 font-medium">Email</th>
-                <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 font-medium">Score</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Name</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Location</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Website</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Email</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Phone</th>
                 <th className="px-4 py-3 font-medium">Why it fits</th>
-                <th className="px-4 py-3 font-medium">Verified</th>
+                <th className="px-4 py-3 font-medium">What to sell</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Score</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Verified</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {!leads || leads.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-zinc-400">
+                  <td colSpan={9} className="px-4 py-10 text-center text-zinc-400">
                     {latest?.status === "running"
                       ? "Discovering leads…"
                       : "No leads yet."}
@@ -183,10 +184,10 @@ function LeadRow({ lead }: { lead: Lead }) {
           <div className="text-xs text-zinc-500">{lead.contact_name}</div>
         )}
       </td>
-      <td className="px-4 py-3 text-zinc-600">
+      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
         {[lead.city, lead.country].filter(Boolean).join(", ") || "—"}
       </td>
-      <td className="px-4 py-3">
+      <td className="whitespace-nowrap px-4 py-3">
         {lead.website ? (
           <a
             href={lead.website}
@@ -200,26 +201,28 @@ function LeadRow({ lead }: { lead: Lead }) {
           "—"
         )}
       </td>
-      <td className="px-4 py-3 text-zinc-600">{lead.email ?? "—"}</td>
-      <td className="px-4 py-3 text-zinc-600">{lead.phone ?? "—"}</td>
-      <td className="px-4 py-3 font-medium text-zinc-900">
-        {Math.round(lead.score)}
-      </td>
-      <td className="px-4 py-3 max-w-sm">
+      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">{lead.email ?? "—"}</td>
+      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">{lead.phone ?? "—"}</td>
+      <td className="min-w-[240px] px-4 py-3">
         {lead.fit_reason ? (
-          <div>
-            <div className="text-zinc-600">{lead.fit_reason}</div>
-            {typeof lead.fit_score === "number" && (
-              <div className="mt-0.5 text-xs text-zinc-400">
-                ICP fit {lead.fit_score}/50
-              </div>
-            )}
+          <div className="text-zinc-600">{lead.fit_reason}</div>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td className="min-w-[240px] px-4 py-3">
+        {lead.what_to_sell ? (
+          <div className="rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800">
+            {lead.what_to_sell}
           </div>
         ) : (
           "—"
         )}
       </td>
-      <td className="px-4 py-3">
+      <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-900">
+        {Math.round(lead.score)}
+      </td>
+      <td className="whitespace-nowrap px-4 py-3">
         {lead.verified ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
             ✓ Verified

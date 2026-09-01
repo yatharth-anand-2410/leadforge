@@ -85,6 +85,21 @@ def category_to_tags(category: str) -> dict[str, str] | None:
     return None
 
 
+def canonical_category(category: str | None) -> str | None:
+    """Return the canonical supported key that ``category_to_tags`` resolves.
+
+    Mirrors the precedence order of ``CATEGORY_TAGS``: the first key contained
+    in the input string. Used to normalize the stored category of every lead in
+    a single-category (gated) run to one consistent label (e.g. "dental" for a
+    "Dental Clinics" discovery). Returns ``None`` when nothing maps.
+    """
+    cat = (category or "").lower()
+    for key in CATEGORY_TAGS:
+        if key in cat:
+            return key
+    return None
+
+
 def supported_categories() -> str:
     """Human-readable list of categories that map to an OSM tag."""
     return ", ".join(sorted(CATEGORY_TAGS.keys()))
@@ -100,6 +115,27 @@ def build_query(tags: dict[str, str], bbox: tuple[float, float, float, float], t
         f"node{selector}({south},{west},{north},{east});"
         f"way{selector}({south},{west},{north},{east});"
         f"relation{selector}({south},{west},{north},{east});"
+        f");"
+        f"out center tags;"
+    )
+
+
+def build_area_query(tags: dict[str, str], area_id: int, timeout: int = 25) -> str:
+    """Build an Overpass QL query for tags inside an OSM area (polygon).
+
+    ``area_id`` is the Overpass area id (3600000000 + relation id for countries /
+    cities). Scoping by the location's real polygon avoids the false "whole
+    world" results a dateline-wrapping bounding box produces for countries such
+    as New Zealand (whose Nominatim bbox is longitude −179..+179).
+    """
+    selector = "".join(f'["{k}"="{v}"]' for k, v in tags.items())
+    return (
+        f"[out:json][timeout:{timeout}];"
+        f"area({area_id});"
+        f"("
+        f"node{selector}(area);"
+        f"way{selector}(area);"
+        f"relation{selector}(area);"
         f");"
         f"out center tags;"
     )
@@ -182,14 +218,25 @@ def _parse_elements(data: dict, category: str, limit: int) -> list[dict]:
 
 def search_businesses(
     category: str,
-    bbox: tuple[float, float, float, float],
+    bbox: tuple[float, float, float, float] | None = None,
+    area_id: int | None = None,
     limit: int = 50,
     client: httpx.Client | None = None,
+    timeout: int = 25,
 ) -> list[dict]:
-    """Discover businesses by category within a bounding box via Overpass."""
+    """Discover businesses by category inside an area (preferred) or bounding box.
+
+    ``area_id`` scopes the search to the location's OSM polygon (use the geocoded
+    administrative relation); fall back to a ``bbox`` when no area is available.
+    """
     tags = category_to_tags(category)
     if tags is None:
         return []
-    query = build_query(tags, bbox)
+    if area_id is not None:
+        query = build_area_query(tags, area_id, timeout=timeout)
+    elif bbox is not None:
+        query = build_query(tags, bbox, timeout=timeout)
+    else:
+        return []
     data = _post_overpass(query, client=client)
     return _parse_elements(data, category, limit)

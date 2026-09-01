@@ -50,12 +50,24 @@ def geocode(query: str, client: httpx.Client | None = None) -> dict | None:
     if not bb or len(bb) != 4:
         return None
 
+    addr = item.get("address") or {}
     south, north, west, east = (float(x) for x in bb)
     return {
         "lat": float(item["lat"]),
         "lon": float(item["lon"]),
         "display_name": item.get("display_name"),
         "boundingbox": (south, west, north, east),  # Overpass order
+        # Country the geocoded place belongs to, used by the agent's save-time
+        # location gate to reject candidates that contradict the target area.
+        "country": addr.get("country"),
+        "country_code": (addr.get("country_code") or "").upper() or None,
+        # Administrative areas (countries, cities) are relations: hand those ids
+        # to Overpass as an `area()` filter so the search is scoped to the
+        # location's polygon. Critical for countries whose bounding box wraps the
+        # antimeridian (e.g. New Zealand): that bbox spans longitude −179..+179,
+        # which Overpass interprets as "nearly the whole world".
+        "osm_type": item.get("osm_type"),
+        "osm_id": item.get("osm_id"),
     }
 
 

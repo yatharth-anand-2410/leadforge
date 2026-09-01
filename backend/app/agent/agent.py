@@ -25,7 +25,12 @@ from ..config import settings
 from ..models.discovery import Discovery
 from ..models.job import Job
 from ..observability import configure, run_config
-from ..services.overpass import supported_categories
+from ..services.overpass import (
+    CATEGORY_TAGS,
+    canonical_category,
+    category_to_tags,
+    supported_categories,
+)
 from ..services.verify import infer_country_code
 from .prompts import DISCOVERY_SUBAGENT_PROMPT, ORCHESTRATOR_PROMPT
 from .tools import AgentContext, build_tools
@@ -86,6 +91,12 @@ def _task_text(discovery: Discovery) -> str:
     if the agent and the summarizer ever disagree about what the task is, the
     summarizer wins and the run drifts (the observed café-list bug).
     """
+    if discovery.brief:
+        return (
+            f"Run the lead discovery pipeline for the following user brief: "
+            f"{discovery.brief} Collect up to {discovery.num_leads} shortlisted "
+            f"leads, then report the final list."
+        )
     return (
         f"Run the lead discovery pipeline for: {discovery.lead_type} in {discovery.location}. "
         f"Collect up to {discovery.num_leads} shortlisted leads, then report the final list."
@@ -161,20 +172,42 @@ Messages to summarize:
 """
 
 
-def _summary_prompt_for(discovery: Discovery) -> str:
+def _summary_prompt_for(discovery: Discovery, category: str | None = None) -> str:
     """Render the summary template for one discovery (see module docstring).
 
     ``__PIPELINE_STATE__`` is deliberately left unresolved: it depends on live
     ``AgentContext`` state that only exists once the run is underway, and is
     substituted per-compaction by ``_ContextAwareSummarizationMiddleware``.
+    ``category`` is the resolved category (structured ``lead_type`` or derived
+    from the brief); pass it so the summarizer's NEXT STEPS stay consistent
+    with the single-category gate even on brief-only runs.
     """
+    resolved = category or discovery.lead_type
     return (
         _SUMMARY_PROMPT_TEMPLATE.replace("__TASK__", _task_text(discovery))
         .replace("__NUM_LEADS__", str(discovery.num_leads))
-        .replace("__CATEGORY__", discovery.lead_type)
-        .replace("__LOCATION__", discovery.location)
+        .replace("__CATEGORY__", resolved or "the businesses described in the USER BRIEF")
+        .replace("__LOCATION__", discovery.location or "the location described in the USER BRIEF")
         .replace("{{messages}}", "{messages}")
     )
+
+
+def _resolve_category(discovery: Discovery) -> str:
+    """The run's target category: the structured ``lead_type``, else derived
+    from the brief's first known category keyword.
+
+    A brief-only discovery ("I want dental clinics in new zealand...") has an
+    empty ``lead_type``, which would leave the single-category gate off and let
+    the agent sweep and save any category. Matching the brief against the
+    supported category keys restores that gate (canonical_category returns the
+    first supported key contained in the text). Returns an empty string when
+    neither source names a category (a broad-buyer brief stays in sweep mode).
+    """
+    if discovery.lead_type:
+        return discovery.lead_type
+    if discovery.brief:
+        return canonical_category(discovery.brief) or ""
+    return ""
 
 
 def _pipeline_state_text(ctx: AgentContext) -> str:
@@ -183,17 +216,37 @@ def _pipeline_state_text(ctx: AgentContext) -> str:
     Reads the same ``AgentContext`` fields the tools already maintain
     specifically to survive compaction (see the loop-guard comment on
     ``AgentContext`` in tools.py), so the summarizer is handed facts instead of
-    being asked to guess them from trimmed message history.
+    being asked to guess them from trimmed message history. For a single-
+    category run the "not yet searched" list is narrowed to that category's
+    aliases; off-target categories are refused/discarded anyway.
     """
-    supported = supported_categories()
     searched = sorted(ctx.searched_categories)
-    remaining = [c for c in supported if c not in ctx.searched_categories]
     exclude = ctx.exclude_keywords or []
-    return (
+    state = (
         f"- Categories already searched via `search_businesses` ({len(searched)}): "
         f"{', '.join(searched) or 'none'}.\n"
-        f"- Supported categories NOT yet searched ({len(remaining)}): "
-        f"{', '.join(remaining) or 'none — every supported category has been searched'}.\n"
+    )
+    target_tags = category_to_tags(ctx.category)
+    if target_tags is not None:
+        remaining = [
+            c
+            for c in CATEGORY_TAGS
+            if c not in ctx.searched_categories and category_to_tags(c) == target_tags
+        ]
+        target = canonical_category(ctx.category) or ctx.category
+        state += (
+            f"- Single-category run (target: {ctx.category}); only matching aliases "
+            f"NOT yet searched ({len(remaining)}): {', '.join(remaining) or 'none'}. "
+            f"Recover candidates for '{target}' by raising `limit` or changing "
+            f"`location` — off-target categories are refused/discarded.\n"
+        )
+    else:
+        remaining = [c for c in CATEGORY_TAGS if c not in ctx.searched_categories]
+        state += (
+            f"- Supported categories NOT yet searched ({len(remaining)}): "
+            f"{', '.join(remaining) or 'none — every supported category has been searched'}.\n"
+        )
+    return state + (
         f"- Exclude keywords (never save a lead matching these): "
         f"{', '.join(exclude) or 'none'}.\n"
         f"- Websites already fetched: {len(ctx.fetched_urls)}.\n"
@@ -346,6 +399,22 @@ class _RateLimitRetryMiddleware(AgentMiddleware):
         )
 
 
+def _brief_text(discovery) -> str:
+    """Authoritative USER BRIEF block injected into the orchestrator prompt.
+
+    Empty when the discovery has no natural-language brief, so the prompt reads
+    exactly as before (structured ICP fields). When present it is marked as
+    authoritative so it overrides the structured category/location lines.
+    """
+    brief = (discovery.brief or "").strip()
+    if not brief:
+        return ""
+    return (
+        "USER BRIEF (AUTHORITATIVE — follow this over the category/location above):\n"
+        f"{brief}"
+    )
+
+
 def _filters_text(discovery: Discovery) -> str:
     parts: list[str] = []
     if discovery.industry:
@@ -355,6 +424,27 @@ def _filters_text(discovery: Discovery) -> str:
     if discovery.exclude_keywords:
         parts.append(f"- Exclude: {', '.join(discovery.exclude_keywords)}")
     return "\n".join(parts) if parts else "(no additional filters)"
+
+
+def _web_search_prompt_text() -> str:
+    """Prompt block describing SearXNG web search when it is configured.
+
+    Empty when ``SEARXNG_ENDPOINT`` is unset so the orchestrator prompt reads
+    exactly as before (single OSM source). When enabled, the block tells the
+    agent that ``search_businesses`` merges web results and covers categories
+    OSM has no tag for, and that web candidates must still be enriched via
+    ``fetch_website`` before saving.
+    """
+    if not settings.searxng_endpoint:
+        return ""
+    return (
+        "WEB SEARCH (SearXNG): a free web search is merged into every "
+        "`search_businesses` call, and it also covers categories OSM has no tag "
+        "for (e.g. digital/SaaS firms) — use it when the ICP is genuinely "
+        "non-local. Web candidates carry a website (and sometimes a snippet "
+        "phone/email) but usually no address or coordinates yet: enrich them "
+        "with `fetch_website` before verifying/saving, just like OSM candidates."
+    )
 
 
 def _build_chat_model(temperature: float):
@@ -411,7 +501,7 @@ def build_agent(discovery: Discovery, job: Job, temperature: float = 0.0):
         discovery_id=discovery.id,
         user_id=discovery.user_id,
         job_id=job.id,
-        category=discovery.lead_type,
+        category=_resolve_category(discovery),
         location=discovery.location,
         industry=discovery.industry,
         keywords=list(discovery.keywords or []),
@@ -423,13 +513,16 @@ def build_agent(discovery: Discovery, job: Job, temperature: float = 0.0):
     tools = build_tools(ctx)
     search_tool = tools[0]  # search_businesses, also exposed to the sub-agent
 
+    category = _resolve_category(discovery)
     system_prompt = ORCHESTRATOR_PROMPT.format(
-        category=discovery.lead_type,
-        location=discovery.location,
+        category=category or "the businesses described in the USER BRIEF",
+        location=discovery.location or "the location described in the USER BRIEF",
         filters=_filters_text(discovery),
+        brief=_brief_text(discovery),
         num_leads=discovery.num_leads,
         exclude_keywords=", ".join(discovery.exclude_keywords or []) or "none",
         supported_categories=supported_categories(),
+        web_search=_web_search_prompt_text(),
     )
 
     model = _build_chat_model(temperature)
@@ -449,7 +542,7 @@ def build_agent(discovery: Discovery, job: Job, temperature: float = 0.0):
         # STATE is re-rendered from `ctx` before every compaction call so
         # categories searched/saves/fetches can't be guessed wrong (see
         # _ContextAwareSummarizationMiddleware).
-        prompt_template=_summary_prompt_for(discovery),
+        prompt_template=_summary_prompt_for(discovery, category=category),
     )
     rate_limit_retry = _RateLimitRetryMiddleware()
 
@@ -461,7 +554,8 @@ def build_agent(discovery: Discovery, job: Job, temperature: float = 0.0):
                 "search at a time; use it to fan out searches in parallel."
             ),
             "system_prompt": DISCOVERY_SUBAGENT_PROMPT.format(
-                category=discovery.lead_type, location=discovery.location
+                category=category or "the businesses described in the USER BRIEF",
+                location=discovery.location or "the location described in the USER BRIEF",
             ),
             "tools": [search_tool],
         }

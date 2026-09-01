@@ -11,7 +11,7 @@ A lead-generation engine. Define an ICP (business category, location, industry, 
 | Database         | SQLite (data **and** job queue)                   |
 | Background jobs  | Standalone worker polling a `jobs` table          |
 | Agent            | LangChain `deepagents` + Groq / Gemini / OpenCode Go |
-| Data sources     | Overpass/OSM, Nominatim, company website crawl, DNS (MX) |
+| Data sources     | Overpass/OSM, Nominatim, SearXNG web search (optional), company website crawl, DNS (MX) |
 
 ## Layout
 
@@ -30,6 +30,7 @@ make install            # uv sync --extra dev
 # 2. Configure
 cp backend/.env.example backend/.env
 #    set the LLM key for your LLM_PROVIDER (e.g. GROQ_API_KEY) and JWT_SECRET
+#    optionally start local web search: make searxng  (then SEARXNG_ENDPOINT=http://localhost:8080)
 
 # 3. Frontend deps
 cd frontend && npm install && cd ..
@@ -52,7 +53,8 @@ make test               # backend pytest suite (uv run pytest)
 
 1. A user creates a **discovery** (ICP definition); this enqueues a `jobs` row.
 2. The **worker** claims the job and runs the **deep agent**.
-3. The agent discovers businesses (Overpass/Nominatim), crawls their websites,
+3. The agent discovers businesses (Overpass/Nominatim + SearXNG web search when
+   configured), crawls their websites,
    verifies emails (format + DNS MX) and phones, deduplicates, scores, and saves
    shortlisted leads — stopping once it has the target count (default 10) of leads
    each with ≥1 verified contact point, or when sources are exhausted.
@@ -74,5 +76,15 @@ Business data is sourced from OpenStreetMap; the UI attributes
   `openai/gpt-oss-20b`, `gemini-2.5-flash`, `deepseek-v4-pro`, `qwen3.7-plus`).
 - Set `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` to trace each job's agent run to LangSmith
   (project `leadforge`), tagged with `discovery_id` / `job_id` / `user_id`.
+- `SEARXNG_ENDPOINT` enables free web search (SearXNG metasearch). Leave blank to
+  disable; web results are merged into `search_businesses` and cover categories OSM
+  has no tag for. Public instances block non-browser clients (anti-bot JS challenges,
+  429s), so run your own with `make searxng` (Docker on `localhost:8080`) and set
+  `SEARXNG_ENDPOINT=http://localhost:8080`. A configured but unreachable instance
+  degrades results to OSM-only and is surfaced in the worker logs and the agent's
+  `progress` report.
+- `ENABLE_OSM` (default `true`) disables the Overpass/Nominatim sources globally
+  when set to `false`, making every `search_businesses` call web-only (requires
+  `SEARXNG_ENDPOINT`). The save-time location guard stays active in web-only mode.
 - V1 discovers physical businesses via OSM; pure-digital/SaaS lead discovery (web search,
   Common Crawl, registries) is out of scope for now.

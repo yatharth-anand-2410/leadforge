@@ -2,36 +2,33 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-function parseList(s: string): string[] {
-  return s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
+type Message =
+  | { role: "user"; text: string }
+  | { role: "assistant"; text: string };
 
-const inputClass =
-  "mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900";
+const EXAMPLES = [
+  "Dental clinics in Bengaluru with a marketing manager, 5–50 staff. We sell local-SEO and review-reputation packages. Find 10 leads.",
+  "SMEs in the food and hospitality space across Phoenix, AZ that need social media management. 15 leads.",
+  "Boutique gyms and fitness studios in Dubai looking for a lead-gen and WhatsApp chat automation service. 8 leads.",
+];
+
+const WELCOME: Message = {
+  role: "assistant",
+  text: "Describe your ideal customer in plain English — who they are, where they are, what to target, and how many leads you want. This becomes the discovery agent's instruction; there's no form to fill in.",
+};
 
 export default function NewDiscoveryPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-
-  const [leadType, setLeadType] = useState("");
-  const [location, setLocation] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [sizeMin, setSizeMin] = useState("");
-  const [sizeMax, setSizeMax] = useState("");
-  const [roles, setRoles] = useState("");
-  const [keywords, setKeywords] = useState("");
-  const [exclude, setExclude] = useState("");
-  const [numLeads, setNumLeads] = useState("10");
-
+  const [messages, setMessages] = useState<Message[]>([WELCOME]);
+  const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const inputRef = useAutofocus();
 
   useEffect(() => {
     if (loading) return;
@@ -46,160 +43,154 @@ export default function NewDiscoveryPage() {
     );
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(description: string) {
+    const text = description.trim();
+    if (!text || busy) return;
+
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setDraft("");
     setBusy(true);
     setError(null);
     try {
-      const created = await api.createDiscovery({
-        lead_type: leadType,
-        location,
-        industry: industry || undefined,
-        company_size_min: sizeMin ? Number(sizeMin) : undefined,
-        company_size_max: sizeMax ? Number(sizeMax) : undefined,
-        target_roles: parseList(roles),
-        keywords: parseList(keywords),
-        exclude_keywords: parseList(exclude),
-        num_leads: numLeads ? Number(numLeads) : 10,
-      });
+      const created = await api.createDiscovery({ brief: text });
       router.push(`/discoveries/${created.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create discovery");
+      setError(
+        err instanceof Error ? err.message : "Failed to create discovery",
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    submit(draft);
+  }
+
   return (
     <main className="flex-1 p-6">
-      <form
-        onSubmit={onSubmit}
-        className="mx-auto w-full max-w-2xl rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
-      >
-        <h1 className="text-xl font-semibold tracking-tight">New discovery</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Define your ideal customer profile.
-        </p>
+      <div className="mx-auto w-full max-w-3xl">
+        <Link href="/" className="text-sm text-zinc-500 hover:underline">
+          ← Back
+        </Link>
 
-        <div className="mt-6 grid gap-5 sm:grid-cols-2">
-          <label className="text-sm font-medium">
-            Lead type / business category <span className="text-red-500">*</span>
-            <input
-              className={inputClass}
-              value={leadType}
-              onChange={(e) => setLeadType(e.target.value)}
-              placeholder="e.g. Dental Clinics"
-              required
-            />
-          </label>
+        <div className="mt-3 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              New discovery
+            </h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              Tell the agent who to find — it will do the rest.
+            </p>
+          </div>
+        </div>
 
-          <label className="text-sm font-medium">
-            Location <span className="text-red-500">*</span>
-            <input
-              className={inputClass}
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Bengaluru, India"
-              required
-            />
-          </label>
-
-          <label className="text-sm font-medium">
-            Industry
-            <input
-              className={inputClass}
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-              placeholder="e.g. Healthcare"
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm font-medium">
-              Company size (min)
-              <input
-                className={inputClass}
-                type="number"
-                min={1}
-                value={sizeMin}
-                onChange={(e) => setSizeMin(e.target.value)}
-                placeholder="e.g. 10"
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Company size (max)
-              <input
-                className={inputClass}
-                type="number"
-                min={1}
-                value={sizeMax}
-                onChange={(e) => setSizeMax(e.target.value)}
-                placeholder="e.g. 200"
-              />
-            </label>
+        <div className="mt-5 flex h-[420px] flex-col rounded-xl border border-zinc-200 bg-white shadow-sm">
+          <div className="flex-1 space-y-4 overflow-y-auto p-5">
+            {messages.map((m, i) =>
+              m.role === "user" ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[80%] whitespace-pre-wrap rounded-lg bg-zinc-900 px-4 py-2.5 text-sm text-white">
+                    {m.text}
+                  </div>
+                </div>
+              ) : (
+                <div key={i} className="flex justify-start">
+                  <div className="max-w-[85%] whitespace-pre-wrap rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-700">
+                    {m.text}
+                  </div>
+                </div>
+              ),
+            )}
+            {busy && (
+              <div className="flex justify-start">
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-400">
+                  Kicking off discovery…
+                </div>
+              </div>
+            )}
           </div>
 
-          <label className="text-sm font-medium sm:col-span-2">
-            Target roles <span className="text-zinc-400">(comma-separated)</span>
-            <input
-              className={inputClass}
-              value={roles}
-              onChange={(e) => setRoles(e.target.value)}
-              placeholder="e.g. Owner, Practice Manager"
+          <form
+            onSubmit={onSubmit}
+            className="border-t border-zinc-200 p-3"
+          >
+            <textarea
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submit(draft);
+                }
+              }}
+              rows={3}
+              placeholder="Describe your ICP in plain English…"
+              className="w-full resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900"
             />
-          </label>
-
-          <label className="text-sm font-medium">
-            Keywords <span className="text-zinc-400">(comma-separated)</span>
-            <input
-              className={inputClass}
-              value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
-              placeholder="e.g. implant, orthodontist"
-            />
-          </label>
-
-          <label className="text-sm font-medium">
-            Exclude keywords <span className="text-zinc-400">(comma-separated)</span>
-            <input
-              className={inputClass}
-              value={exclude}
-              onChange={(e) => setExclude(e.target.value)}
-              placeholder="e.g. franchise, mobile"
-            />
-          </label>
-
-          <label className="text-sm font-medium">
-            Number of leads <span className="text-red-500">*</span>
-            <input
-              className={inputClass}
-              type="number"
-              min={1}
-              value={numLeads}
-              onChange={(e) => setNumLeads(e.target.value)}
-              required
-            />
-          </label>
+            <div className="mt-2 flex items-center justify-between gap-4">
+              <p className="text-xs text-zinc-400">
+                Enter to send · Shift+Enter for a new line
+              </p>
+              <div className="flex items-center gap-3">
+                {error && <p className="text-xs text-red-600">{error}</p>}
+                {!busy && !messages.some((m) => m.role === "user") && (
+                  <Labels examples={EXAMPLES} onPick={(t) => submit(t)} />
+                )}
+                <button
+                  type="submit"
+                  disabled={busy || !draft.trim()}
+                  className="shrink-0 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  {busy ? "Starting…" : "Start discovery"}
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-        <div className="mt-6 flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
-          >
-            {busy ? "Creating…" : "Create & run"}
-          </button>
-          <Link
-            href="/"
-            className="rounded-md border border-zinc-300 px-4 py-2 text-sm transition-colors hover:bg-zinc-50"
-          >
-            Cancel
-          </Link>
-        </div>
-      </form>
+        <p className="mt-4 text-xs text-zinc-400">
+          Your description is used verbatim as the discovery agent instructions —
+          no field-mapping happens behind the scenes.
+        </p>
+      </div>
     </main>
+  );
+}
+
+function useAutofocus() {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  return ref;
+}
+
+function Labels({
+  examples,
+  onPick,
+}: {
+  examples: string[];
+  onPick: (t: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      {examples.map((ex) => {
+        const short = ex.split(",")[0];
+        return (
+          <button
+            key={ex}
+            type="button"
+            onClick={() => onPick(ex)}
+            className="hidden rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 sm:inline-block"
+            title={ex}
+          >
+            {short}
+          </button>
+        );
+      })}
+    </div>
   );
 }

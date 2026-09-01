@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     overpass_endpoint: str = "https://overpass-api.de/api/interpreter"
     nominatim_endpoint: str = "https://nominatim.openstreetmap.org"
     nominatim_user_agent: str = "leadforge"
+    # False disables the OSM/Nominatim (Overpass) sources entirely, making every
+    # `search_businesses` call web-only (SearXNG). Requires SEARXNG_ENDPOINT.
+    enable_osm: bool = True
+
+    # Free web search via SearXNG metasearch. Empty string disables web search
+    # (Overpass/Nominatim still run). Public instances are rate-limited; run
+    # your own for stable, unfiltered JSON API access.
+    searxng_endpoint: str = ""
+    searxng_timeout: int = 15
 
     # Web
     cors_origins: str = "http://localhost:3000"

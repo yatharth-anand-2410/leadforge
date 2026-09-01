@@ -60,6 +60,17 @@ def extract_socials(soup: BeautifulSoup) -> dict[str, str]:
     return found
 
 
+def extract_socials_from_urls(url: str) -> dict[str, str]:
+    """Map a single URL to a known social link by host, if any (e.g. facebook.com)."""
+    if not url:
+        return {}
+    lowered = url.lower()
+    for domain in SOCIAL_DOMAINS:
+        if domain in lowered:
+            return {domain: url}
+    return {}
+
+
 def extract_contacts(html: str) -> dict:
     """Parse HTML and extract title, emails, phones, and social links."""
     soup = BeautifulSoup(html, "html.parser")

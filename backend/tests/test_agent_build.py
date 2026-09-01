@@ -8,13 +8,16 @@ from app.agent.agent import (
     _SUMMARY_KEEP_TOKENS,
     _SUMMARY_TRIGGER_TOKENS,
     _SUMMARY_TRIM_TOKENS,
+    _brief_text,
     _build_chat_model,
     _ContextAwareSummarizationMiddleware,
     _is_rate_limit_error,
     _is_tool_use_failure,
     _pipeline_state_text,
     _RateLimitRetryMiddleware,
+    _resolve_category,
     _summary_thresholds,
+    _task_text,
     build_agent,
 )
 from app.agent.prompts import DISCOVERY_SUBAGENT_PROMPT, ORCHESTRATOR_PROMPT
@@ -87,8 +90,97 @@ def test_orchestrator_prompt_forbids_premature_zero_lead_conclusion():
     assert "NEVER interpret the ICP as the service PROVIDERS" in ORCHESTRATOR_PROMPT
 
 
+def test_orchestrator_prompt_pins_single_category_icp():
+    """A single-category ICP must never spread into unrelated categories."""
+    assert "SINGLE-CATEGORY ICP" in ORCHESTRATOR_PROMPT
+    assert "NEVER spread into unrelated categories" in ORCHESTRATOR_PROMPT
+    assert "refuse off-target" in ORCHESTRATOR_PROMPT.lower() or "off-target" in ORCHESTRATOR_PROMPT
+    assert "NEVER save a lead outside that vertical" in ORCHESTRATOR_PROMPT
+
+
+def test_brief_text_empty_without_brief():
+    assert _brief_text(_discovery()) == ""
+
+
+def test_brief_text_marks_brief_authoritative():
+    text = _brief_text(
+        _discovery(brief="Find camera shops in Kathmandu for a POS system.")
+    )
+    assert "USER BRIEF (AUTHORITATIVE" in text
+    assert "camera shops in Kathmandu" in text
+
+
+def test_task_text_uses_brief():
+    text = _task_text(_discovery(brief="Find cafes in Lisbon needing loyalty apps."))
+    assert "user brief" in text
+    assert "loyalty apps" in text
+
+
+def test_task_text_structured_without_brief():
+    text = _task_text(_discovery())
+    assert "Dental Clinics in Bengaluru, India" in text
+
+
 def test_subagent_prompt_handles_non_supported_category():
     assert "closest supported category" in DISCOVERY_SUBAGENT_PROMPT
+
+
+def test_resolve_category_prefers_lead_type():
+    assert _resolve_category(_discovery()) == "Dental Clinics"
+
+
+def test_resolve_category_derives_from_brief():
+    d = _discovery(
+        lead_type="",
+        location="",
+        brief="I want dental clinics in new zealand that is looking for website development",
+    )
+    assert _resolve_category(d) == "dental"
+
+
+def test_resolve_category_empty_for_broad_brief():
+    d = _discovery(
+        lead_type="",
+        location="",
+        brief="SMEs looking for digital marketing and growth services",
+    )
+    assert _resolve_category(d) == ""
+
+
+def test_build_agent_brief_only_pins_category_and_brief(monkeypatch):
+    """A brief-only discovery must surface the brief AND gate on the derived
+    category, so it can't sweep and save off-target categories again."""
+    monkeypatch.setattr("app.agent.agent.settings.groq_api_key", "dummy")
+    captured = {}
+
+    class _Sentinel:
+        pass
+
+    def fake_create_deep_agent(**kwargs):
+        captured.update(kwargs)
+        return _Sentinel()
+
+    monkeypatch.setattr("app.agent.agent.create_deep_agent", fake_create_deep_agent)
+    d = _discovery(
+        lead_type="",
+        location="",
+        brief="I want dental clinics in new zealand that is looking for website development",
+    )
+
+    agent, ctx = build_agent(d, _job())
+
+    assert ctx.category == "dental"
+    system = captured["system_prompt"]
+    assert "dental" in system
+    assert "USER BRIEF (AUTHORITATIVE" in system
+    assert "new zealand" in system
+
+    from app.agent.tools import build_tools
+
+    search = build_tools(ctx)[0]
+    out = search.invoke({"category": "bakery", "location": "Auckland, New Zealand"})
+    assert "does not match" in out
+    assert "dental" in out
 
 
 class _StatusError(Exception):

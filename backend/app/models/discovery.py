@@ -13,6 +13,7 @@ class Discovery(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    brief: Mapped[str | None] = mapped_column(nullable=True)
     lead_type: Mapped[str] = mapped_column(String(200), nullable=False)
     location: Mapped[str] = mapped_column(String(200), nullable=False)
     industry: Mapped[str | None] = mapped_column(String(200), nullable=True)

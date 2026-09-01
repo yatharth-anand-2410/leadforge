@@ -46,6 +46,8 @@ def test_infer_country_code():
     assert verify.infer_country_code("Bengaluru, India") == "IN"
     assert verify.infer_country_code("Phoenix, Arizona, USA") == "US"
     assert verify.infer_country_code("Dubai, UAE") == "AE"
+    assert verify.infer_country_code("New Zealand") == "NZ"
+    assert verify.infer_country_code("Wellington, New Zealand") == "NZ"
     assert verify.infer_country_code("") is None
     assert verify.infer_country_code(None) is None
 

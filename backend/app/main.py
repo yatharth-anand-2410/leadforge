@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .db import Base, engine, ensure_lead_columns
+from .db import Base, engine, ensure_discovery_columns, ensure_lead_columns
 from .routers import auth, discoveries, jobs, leads
 
 
@@ -14,6 +14,7 @@ from .routers import auth, discoveries, jobs, leads
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     ensure_lead_columns()
+    ensure_discovery_columns()
     yield
 
 

@@ -43,6 +43,7 @@ class Base(DeclarativeBase):
 _LEAD_ADDITIONS = {
     "fit_score": "FLOAT",
     "fit_reason": "VARCHAR(1000)",
+    "what_to_sell": "VARCHAR(1000)",
 }
 
 
@@ -56,6 +57,17 @@ def ensure_lead_columns() -> None:
         for name, coltype in _LEAD_ADDITIONS.items():
             if name not in existing:
                 conn.execute(text(f"ALTER TABLE leads ADD COLUMN {name} {coltype}"))
+
+
+def ensure_discovery_columns() -> None:
+    """Idempotently add post-release columns to the ``discoveries`` table."""
+    if "discoveries" not in inspect(engine).get_table_names():
+        Base.metadata.create_all(bind=engine)
+        return
+    existing = {col["name"] for col in inspect(engine).get_columns("discoveries")}
+    with engine.begin() as conn:
+        if "brief" not in existing:
+            conn.execute(text("ALTER TABLE discoveries ADD COLUMN brief TEXT"))
 
 
 def get_db():

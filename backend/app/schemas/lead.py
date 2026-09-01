@@ -28,6 +28,7 @@ class LeadOut(BaseModel):
     score_breakdown: dict
     fit_score: float | None
     fit_reason: str | None
+    what_to_sell: str | None
     verified: bool
     verified_method: str | None
     status: str

@@ -90,6 +90,7 @@ export interface Discovery {
   id: number;
   user_id: number;
   name: string;
+  brief: string | null;
   lead_type: string;
   location: string;
   industry: string | null;
@@ -105,8 +106,9 @@ export interface Discovery {
 
 export interface DiscoveryCreateInput {
   name?: string;
-  lead_type: string;
-  location: string;
+  brief?: string;
+  lead_type?: string;
+  location?: string;
   industry?: string;
   company_size_min?: number;
   company_size_max?: number;
@@ -139,6 +141,7 @@ export interface Lead {
   score_breakdown: Record<string, unknown>;
   fit_score: number | null;
   fit_reason: string | null;
+  what_to_sell: string | null;
   verified: boolean;
   verified_method: string | null;
   status: string;

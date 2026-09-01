@@ -49,6 +49,7 @@ _COUNTRY_DIALING = {
     "AU": "61",
     "AE": "971",
     "SG": "65",
+    "NZ": "64",
 }
 
 # Substrings that pin a free-text location (e.g. "Patna, Bihar, India") to a
@@ -71,6 +72,7 @@ _COUNTRY_HINTS = {
     "AU": ("australia", "sydney", "melbourne", "brisbane", "perth"),
     "AE": ("united arab emirates", "uae", "dubai", "abu dhabi", "sharjah"),
     "SG": ("singapore",),
+    "NZ": ("new zealand", "nz", "auckland", "wellington", "christchurch", "hamilton"),
 }
 
 

@@ -1,0 +1,32 @@
+# SearXNG settings for the local Lead Forge instance.
+# Built on top of the official defaults (`use_default_settings`) so engines,
+# plugins and the UI keep working; we only override what Lead Forge needs.
+use_default_settings: true
+
+server:
+  base_url: http://localhost:8080/
+  secret_key: "ac1656dacc9ea08e6d3060d38a6da2ebdf0defb23c9a943ed3af01c984b4bb9b"
+  # Local single-user instance: skip the rate limiter (and its Redis/limiter.db
+  # dependency) so the JSON API stays open for the discovery worker.
+  limiter: false
+
+search:
+  formats:
+    - html
+    - json
+
+# The default engine set leans on Google/Brave/Startpage, which aggressively
+# bot-block datacenter IPs (CAPTCHA / 403 / suspensions), making the JSON API
+# return 200-with-empty-results. Pin the engines that tolerate scripted access;
+# disable the chronically blocked ones so their suspensions don't add noise.
+engines:
+  - name: bing
+    disabled: false
+  - name: google
+    disabled: false
+  - name: mojeek
+    disabled: false
+  - name: brave
+    disabled: true
+  - name: startpage
+    disabled: true

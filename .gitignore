@@ -20,3 +20,6 @@ next-env.d.ts
 # Misc
 .DS_Store
 *.log
+
+# SearXNG runtime (created by the container)
+backend/searxng/limiter.db

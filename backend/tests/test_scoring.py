@@ -1,7 +1,7 @@
 from app.services.scoring import is_excluded, score_lead
 
 
-def test_full_lead_scores_high():
+def test_llm_score_is_used_directly():
     lead = {
         "name": "Acme Dental",
         "category": "Dental Clinics",
@@ -9,52 +9,44 @@ def test_full_lead_scores_high():
         "email": "info@acme.com",
         "verified": True,
         "phone": "+15551234567",
-        "contact_name": "Jane Doe",
     }
-    score, breakdown = score_lead(lead, keywords=["dental"], fit_score=48)
-    assert score >= 90
-    assert breakdown["verified_email"] == 20
-    assert breakdown["fit"] == 48
+    score, breakdown = score_lead(lead, keywords=["dental"], fit_score=92)
+    assert score == 92
+    assert breakdown == {"llm": 92}
 
 
-def test_score_is_contact_plus_fit():
-    lead = {
-        "name": "Acme Dental",
-        "website": "https://acme.com",
-        "email": "info@acme.com",
-        "verified": True,
-        "phone": "+15551234567",
-    }
-    score, breakdown = score_lead(lead, fit_score=30)
-    # 12 (website) + 20 (email) + 10 (phone) = 42 contact, 30 fit
-    assert score == 72
-    assert breakdown["fit"] == 30
+def test_llm_score_capped_to_100():
+    lead = {"name": "Acme Dental"}
+    score, breakdown = score_lead(lead, fit_score=150)
+    assert score == 100
+    assert breakdown["llm"] == 100
 
 
-def test_fit_score_capped_to_50():
-    lead = {"name": "Acme Dental", "email": "a@b.com", "verified": True}
-    score, breakdown = score_lead(lead, fit_score=99)
-    assert breakdown["fit"] == 50
-    assert score == 50 + 20
+def test_llm_score_floored_to_0():
+    lead = {"name": "Acme Dental"}
+    score, _ = score_lead(lead, fit_score=-5)
+    assert score == 0
 
 
-def test_bare_lead_scores_low():
+def test_bare_lead_scores_zero_without_fit():
     score, _ = score_lead({"name": "Unknown"}, keywords=[])
     assert score == 0
 
 
-def test_keyword_fallback_scales_fit():
+def test_keyword_fallback_when_no_llm_score():
     lead = {"name": "crm automation ai agency", "category": "saas"}
     _, breakdown = score_lead(lead, keywords=["crm", "automation", "ai", "agency", "saas", "tool"])
-    assert breakdown["keywords"] == 15  # capped
-    assert breakdown["fit"] == 50  # kw points scale to the 50-point fit half
+    assert breakdown["llm"] > 0
 
 
-def test_fit_provided_suppresses_keyword_fallback():
-    lead = {"name": "crm automation ai agency"}
-    _, breakdown = score_lead(lead, keywords=["crm", "ai"], fit_score=42)
-    assert breakdown["fit"] == 42
-    assert "keywords" not in breakdown
+def test_contact_fields_no_longer_additive():
+    """Score is purely the LLM judgment — contacts don't add points."""
+    rich = score_lead(
+        {"name": "Acme", "website": "https://acme.com", "email": "a@b.com", "verified": True, "phone": "+1"},
+        fit_score=50,
+    )
+    bare = score_lead({"name": "Acme"}, fit_score=50)
+    assert rich[0] == bare[0] == 50
 
 
 def test_exclude_matches_name():
