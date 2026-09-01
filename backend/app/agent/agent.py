@@ -8,7 +8,6 @@ other providers, whose limits are dollar-based rather than TPM-based.
 """
 
 import asyncio
-import threading
 import time
 
 from deepagents import create_deep_agent
@@ -555,9 +554,9 @@ def build_agent(discovery: Discovery, job: Job, temperature: float = 0.0):
 def run_agent(discovery: Discovery, job: Job) -> AgentContext:
     """Run the pipeline for a discovery; returns the context (with collected leads).
 
-    The agent's step count is bounded by ``max_agent_iterations`` (passed as the
-    LangGraph ``recursion_limit``); a wall-clock cap of ``job_timeout_seconds``
-    guards against a single slow run.
+    No artificial caps: the agent runs until it reaches the lead quota or
+    exhausts the pipeline, using deepagents' default recursion limit (9999) —
+    loop guards (re-search nudge, fetch cache) keep it from burning turns.
 
     Providers intermittently reject a model generation with a malformed tool
     call (Groq HTTP 400 ``tool_use_failed``). That error is server-side and
@@ -569,47 +568,34 @@ def run_agent(discovery: Discovery, job: Job) -> AgentContext:
 
     task = _task_text(discovery)
 
-    outcome: dict = {"error": None, "ctx": None}
-
-    def _invoke() -> None:
-        try:
-            for temperature in _RETRY_TEMPERATURES:
-                try:
-                    agent, ctx = build_agent(discovery, job, temperature=temperature)
-                    agent.invoke(
-                        {"messages": [{"role": "user", "content": task}]},
-                        config={
-                            "recursion_limit": settings.max_agent_iterations,
-                            **run_config(discovery, job),
-                        },
-                    )
-                    outcome["ctx"] = ctx
-                    return
-                except Exception as exc:
-                    if not _is_tool_use_failure(exc):
-                        raise
-                    print(
-                        "Malformed tool-call generation rejected by the provider; "
-                        f"retrying with temperature={temperature} ({exc})"
-                    )
-        except Exception as exc:  # noqa: BLE001 — re-raised in the caller's thread
-            if _is_rate_limit_error(exc):
-                exc = RuntimeError(
-                    "The discovery agent repeatedly hit the provider's rate limit "
-                    f"for `{settings.llm_model}` on `{settings.llm_provider}`. Even "
-                    "with compaction the request budget was too small for a full "
-                    "multi-category sweep. Upgrade the plan/tier for this provider, "
-                    "or set LLM_PROVIDER / LLM_MODEL in backend/.env to a provider "
-                    "with a higher request budget, then rerun the job."
+    def _invoke() -> AgentContext:
+        for temperature in _RETRY_TEMPERATURES:
+            try:
+                agent, ctx = build_agent(discovery, job, temperature=temperature)
+                agent.invoke(
+                    {"messages": [{"role": "user", "content": task}]},
+                    config=run_config(discovery, job),
                 )
-            outcome["error"] = exc
+                return ctx
+            except Exception as exc:
+                if not _is_tool_use_failure(exc):
+                    raise
+                print(
+                    "Malformed tool-call generation rejected by the provider; "
+                    f"retrying with temperature={temperature} ({exc})"
+                )
+        return None
 
-    thread = threading.Thread(target=_invoke, daemon=True)
-    thread.start()
-    thread.join(timeout=settings.job_timeout_seconds)
-
-    if thread.is_alive():
-        raise RuntimeError(f"Job timed out after {settings.job_timeout_seconds}s")
-    if outcome["error"] is not None:
-        raise outcome["error"]
-    return outcome["ctx"]
+    try:
+        return _invoke()
+    except Exception as exc:  # noqa: BLE001
+        if _is_rate_limit_error(exc):
+            exc = RuntimeError(
+                "The discovery agent repeatedly hit the provider's rate limit "
+                f"for `{settings.llm_model}` on `{settings.llm_provider}`. Even "
+                "with compaction the request budget was too small for a full "
+                "multi-category sweep. Upgrade the plan/tier for this provider, "
+                "or set LLM_PROVIDER / LLM_MODEL in backend/.env to a provider "
+                "with a higher request budget, then rerun the job."
+            )
+        raise exc

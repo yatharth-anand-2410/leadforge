@@ -43,12 +43,6 @@ class Settings(BaseSettings):
     # Web
     cors_origins: str = "http://localhost:3000"
 
-    # Agent limits. 80 gives headroom for a legitimate 5-category sweep now that
-    # loop guards (re-search nudge, fetch cache) stop the agent from burning
-    # turns re-doing the same work.
-    max_agent_iterations: int = 80
-    job_timeout_seconds: int = 900
-
     # Observability (LangSmith)
     langsmith_tracing: bool = False
     langsmith_api_key: str = ""
