@@ -31,8 +31,7 @@ def run_config(discovery, job) -> dict:
             "discovery_id": discovery.id,
             "job_id": job.id,
             "user_id": discovery.user_id,
-            "lead_type": discovery.lead_type,
-            "location": discovery.location,
+            "brief": discovery.brief,
             "num_leads": discovery.num_leads,
         },
     }

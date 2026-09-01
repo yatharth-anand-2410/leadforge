@@ -8,7 +8,7 @@ def test_create_discovery_queues_job(client):
     headers = _auth_headers(client)
     r = client.post(
         "/discoveries",
-        json={"lead_type": "Dental Clinics", "location": "Bengaluru", "num_leads": 10},
+        json={"brief": "Dental Clinics in Bengaluru", "num_leads": 10},
         headers=headers,
     )
     assert r.status_code == 201
@@ -22,7 +22,7 @@ def test_create_discovery_queues_job(client):
 
 def test_re_run_creates_new_job(client):
     headers = _auth_headers(client)
-    d = client.post("/discoveries", json={"lead_type": "Restaurants", "location": "Mumbai"}, headers=headers).json()
+    d = client.post("/discoveries", json={"brief": "Restaurants in Mumbai"}, headers=headers).json()
 
     r = client.post(f"/discoveries/{d['id']}/run", headers=headers)
     assert r.status_code == 201
@@ -34,7 +34,7 @@ def test_re_run_creates_new_job(client):
 
 def test_jobs_are_user_scoped(client):
     h1 = _auth_headers(client, "u1", "pw")
-    d = client.post("/discoveries", json={"lead_type": "Gyms", "location": "Delhi"}, headers=h1).json()
+    d = client.post("/discoveries", json={"brief": "Gyms in Delhi"}, headers=h1).json()
 
     h2 = _auth_headers(client, "u2", "pw")
     r = client.get(f"/discoveries/{d['id']}/jobs", headers=h2)

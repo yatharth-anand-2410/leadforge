@@ -49,9 +49,7 @@ def list_discoveries(db: Session = Depends(get_db), user: User = Depends(get_cur
 def _default_name(payload: DiscoveryCreate) -> str:
     if payload.name:
         return payload.name
-    if payload.brief:
-        return payload.brief.strip().splitlines()[0][:200] or str(payload.brief)[:200]
-    return f"{payload.lead_type} in {payload.location}"
+    return payload.brief.strip().splitlines()[0][:200] or str(payload.brief)[:200]
 
 
 @router.post("", response_model=DiscoveryOut, status_code=status.HTTP_201_CREATED)
@@ -64,14 +62,6 @@ def create_discovery(
         user_id=user.id,
         name=_default_name(payload),
         brief=payload.brief,
-        lead_type=payload.lead_type or "",
-        location=payload.location or "",
-        industry=payload.industry,
-        company_size_min=payload.company_size_min,
-        company_size_max=payload.company_size_max,
-        target_roles=payload.target_roles,
-        keywords=payload.keywords,
-        exclude_keywords=payload.exclude_keywords,
         num_leads=max(1, payload.num_leads),
     )
     db.add(discovery)

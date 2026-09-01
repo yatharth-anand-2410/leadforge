@@ -82,7 +82,7 @@ export default function DiscoveryDetailPage() {
               {discovery?.name ?? "Discovery"}
             </h1>
             <p className="mt-1 text-sm text-zinc-500">
-              {discovery?.lead_type} · {discovery?.location} · target{" "}
+              {discovery?.brief.split("\n")[0]} · target{" "}
               {discovery?.num_leads} leads
             </p>
           </div>

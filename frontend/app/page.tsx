@@ -113,7 +113,7 @@ export default function Dashboard() {
                   {d.name}
                 </Link>
                 <p className="truncate text-sm text-zinc-500">
-                  {d.lead_type} · {d.location} · {d.num_leads} leads
+                  {d.brief.split("\n")[0]} · {d.num_leads} leads
                 </p>
               </div>
               {d.latest_job ? (

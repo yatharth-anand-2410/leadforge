@@ -58,8 +58,7 @@ def test_run_config_metadata():
     class Discovery:
         id = 7
         user_id = 3
-        lead_type = "Dentist"
-        location = "Patna"
+        brief = "Dentist clinics in Patna"
         num_leads = 10
 
     class Job:
@@ -71,8 +70,7 @@ def test_run_config_metadata():
         "discovery_id": 7,
         "job_id": 42,
         "user_id": 3,
-        "lead_type": "Dentist",
-        "location": "Patna",
+        "brief": "Dentist clinics in Patna",
         "num_leads": 10,
     }
     assert cfg["tags"] == ["leadforge", "discovery:7", "user:3"]

@@ -44,7 +44,7 @@ def test_list_leads_filters_shortlisted(client_and_db):
     client, Session = client_and_db
     h = _headers(client)
     d = client.post(
-        "/discoveries", json={"lead_type": "Dental Clinics", "location": "Bengaluru"}, headers=h
+        "/discoveries", json={"brief": "Dental Clinics in Bengaluru"}, headers=h
     ).json()
     did = d["id"]
 
@@ -66,7 +66,7 @@ def test_list_leads_filters_shortlisted(client_and_db):
 def test_leads_are_user_scoped(client_and_db):
     client, Session = client_and_db
     h1 = _headers(client, "u1")
-    d = client.post("/discoveries", json={"lead_type": "Gyms", "location": "Delhi"}, headers=h1).json()
+    d = client.post("/discoveries", json={"brief": "Gyms in Delhi"}, headers=h1).json()
 
     db = Session()
     db.add(Lead(discovery_id=d["id"], user_id=1, name="Gym", status="shortlisted"))

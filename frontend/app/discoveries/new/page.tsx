@@ -11,14 +11,14 @@ type Message =
   | { role: "assistant"; text: string };
 
 const EXAMPLES = [
-  "Dental clinics in Bengaluru with a marketing manager, 5–50 staff. We sell local-SEO and review-reputation packages. Find 10 leads.",
-  "SMEs in the food and hospitality space across Phoenix, AZ that need social media management. 15 leads.",
-  "Boutique gyms and fitness studios in Dubai looking for a lead-gen and WhatsApp chat automation service. 8 leads.",
+  "Dental clinics in Bengaluru with a marketing manager, 5–50 staff. We sell local-SEO and review-reputation packages.",
+  "SMEs in the food and hospitality space across Phoenix, AZ that need social media management.",
+  "Boutique gyms and fitness studios in Dubai looking for a lead-gen and WhatsApp chat automation service.",
 ];
 
 const WELCOME: Message = {
   role: "assistant",
-  text: "Describe your ideal customer in plain English — who they are, where they are, what to target, and how many leads you want. This becomes the discovery agent's instruction; there's no form to fill in.",
+  text: "Describe your ideal customer in plain English — who they are, where they are, and what to target. Set the number of leads you want below. This becomes the discovery agent's instruction; there's no form to fill in.",
 };
 
 export default function NewDiscoveryPage() {
@@ -26,6 +26,7 @@ export default function NewDiscoveryPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [draft, setDraft] = useState("");
+  const [numLeads, setNumLeads] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useAutofocus();
@@ -52,7 +53,11 @@ export default function NewDiscoveryPage() {
     setBusy(true);
     setError(null);
     try {
-      const created = await api.createDiscovery({ brief: text });
+      const parsed = numLeads ? parseInt(numLeads, 10) : undefined;
+      const created = await api.createDiscovery({
+        brief: text,
+        ...(parsed && parsed > 0 ? { num_leads: parsed } : {}),
+      });
       router.push(`/discoveries/${created.id}`);
     } catch (err) {
       setError(
@@ -131,9 +136,17 @@ export default function NewDiscoveryPage() {
               className="w-full resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900"
             />
             <div className="mt-2 flex items-center justify-between gap-4">
-              <p className="text-xs text-zinc-400">
-                Enter to send · Shift+Enter for a new line
-              </p>
+              <label className="flex items-center gap-2 text-sm text-zinc-600">
+                How many leads?
+                <input
+                  type="number"
+                  min={1}
+                  value={numLeads}
+                  onChange={(e) => setNumLeads(e.target.value)}
+                  placeholder="10"
+                  className="w-20 rounded-md border border-zinc-300 px-2 py-1 text-sm outline-none focus:border-zinc-900"
+                />
+              </label>
               <div className="flex items-center gap-3">
                 {error && <p className="text-xs text-red-600">{error}</p>}
                 {!busy && !messages.some((m) => m.role === "user") && (
@@ -153,7 +166,8 @@ export default function NewDiscoveryPage() {
 
         <p className="mt-4 text-xs text-zinc-400">
           Your description is used verbatim as the discovery agent instructions —
-          no field-mapping happens behind the scenes.
+          only the lead count is a separate setting. Leave it blank for the
+          default of 10.
         </p>
       </div>
     </main>

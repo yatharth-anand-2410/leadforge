@@ -6,7 +6,14 @@ Run with: ``uv run python -m app.worker.worker`` (or ``make worker``).
 import time
 
 from ..agent.agent import run_agent
-from ..db import Base, SessionLocal, engine, ensure_discovery_columns, ensure_lead_columns
+from ..db import (
+    Base,
+    SessionLocal,
+    drop_deprecated_discovery_columns,
+    engine,
+    ensure_discovery_columns,
+    ensure_lead_columns,
+)
 from ..models.discovery import Discovery
 from ..models.job import Job
 from ..models.lead import Lead
@@ -64,6 +71,7 @@ def main() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_lead_columns()
     ensure_discovery_columns()
+    drop_deprecated_discovery_columns()
     print("Lead Forge worker started. Polling for jobs...")
     while True:
         job_id = claim_next_job()

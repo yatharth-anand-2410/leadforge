@@ -70,6 +70,58 @@ def ensure_discovery_columns() -> None:
             conn.execute(text("ALTER TABLE discoveries ADD COLUMN brief TEXT"))
 
 
+# Columns of the legacy structured-discovery form, removed from the ORM when the
+# form was deprecated (the agent now derives everything from the brief).
+_DEPRECATED_DISCOVERY_COLUMNS = (
+    "lead_type",
+    "location",
+    "industry",
+    "company_size_min",
+    "company_size_max",
+    "target_roles",
+    "keywords",
+    "exclude_keywords",
+    # Older form iteration found in existing deployments.
+    "service_name",
+    "service_description",
+    "ideal_customer",
+    "target_industries",
+    "buyer_signals",
+    "enabled_sources",
+)
+
+
+def drop_deprecated_discovery_columns() -> None:
+    """Idempotently drop legacy form columns from ``discoveries``.
+
+    Destructive: legacy form-created rows lose their structured fields. Their
+    ``brief`` is backfilled with the discovery ``name`` first so those rows can
+    still produce a usable agent task (the run's target comes from the brief).
+
+    Any column not in the current ORM model is dropped (SQLite >= 3.35 and
+    Postgres both support ``ALTER TABLE ... DROP COLUMN``), so both the repo's
+    structured fields and orphaned columns from older form schemas are removed.
+    """
+    from .models.discovery import Discovery
+
+    if "discoveries" not in inspect(engine).get_table_names():
+        return
+    expected = {c.name for c in Discovery.__table__.columns}
+    existing = {col["name"] for col in inspect(engine).get_columns("discoveries")}
+    present = sorted(existing - expected)
+    if not present:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE discoveries SET brief = name "
+                "WHERE brief IS NULL OR trim(brief) = ''"
+            )
+        )
+        for col in present:
+            conn.execute(text(f"ALTER TABLE discoveries DROP COLUMN {col}"))
+
+
 def get_db():
     """FastAPI dependency that yields a database session."""
     db = SessionLocal()

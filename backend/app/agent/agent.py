@@ -31,7 +31,6 @@ from ..services.overpass import (
     category_to_tags,
     supported_categories,
 )
-from ..services.verify import infer_country_code
 from .prompts import DISCOVERY_SUBAGENT_PROMPT, ORCHESTRATOR_PROMPT
 from .tools import AgentContext, build_tools
 
@@ -98,7 +97,7 @@ def _task_text(discovery: Discovery) -> str:
             f"leads, then report the final list."
         )
     return (
-        f"Run the lead discovery pipeline for: {discovery.lead_type} in {discovery.location}. "
+        f"Run the lead discovery pipeline for: {discovery.name}. "
         f"Collect up to {discovery.num_leads} shortlisted leads, then report the final list."
     )
 
@@ -178,33 +177,29 @@ def _summary_prompt_for(discovery: Discovery, category: str | None = None) -> st
     ``__PIPELINE_STATE__`` is deliberately left unresolved: it depends on live
     ``AgentContext`` state that only exists once the run is underway, and is
     substituted per-compaction by ``_ContextAwareSummarizationMiddleware``.
-    ``category`` is the resolved category (structured ``lead_type`` or derived
-    from the brief); pass it so the summarizer's NEXT STEPS stay consistent
-    with the single-category gate even on brief-only runs.
+    ``category`` is the resolved category (derived from the brief); pass it so
+    the summarizer's NEXT STEPS stay consistent with the single-category gate.
     """
-    resolved = category or discovery.lead_type
+    resolved = category or _resolve_category(discovery)
     return (
         _SUMMARY_PROMPT_TEMPLATE.replace("__TASK__", _task_text(discovery))
         .replace("__NUM_LEADS__", str(discovery.num_leads))
         .replace("__CATEGORY__", resolved or "the businesses described in the USER BRIEF")
-        .replace("__LOCATION__", discovery.location or "the location described in the USER BRIEF")
+        .replace("__LOCATION__", "the location described in the USER BRIEF")
         .replace("{{messages}}", "{messages}")
     )
 
 
 def _resolve_category(discovery: Discovery) -> str:
-    """The run's target category: the structured ``lead_type``, else derived
-    from the brief's first known category keyword.
+    """The run's target category, derived from the brief's first known category keyword.
 
-    A brief-only discovery ("I want dental clinics in new zealand...") has an
-    empty ``lead_type``, which would leave the single-category gate off and let
-    the agent sweep and save any category. Matching the brief against the
-    supported category keys restores that gate (canonical_category returns the
-    first supported key contained in the text). Returns an empty string when
-    neither source names a category (a broad-buyer brief stays in sweep mode).
+    A brief-only discovery has no structured ``lead_type``, which would leave the
+    single-category gate off and let the agent sweep and save any category.
+    Matching the brief against the supported category keys restores that gate
+    (canonical_category returns the first supported key contained in the text).
+    Returns an empty string when the brief names no category (a broad-buyer
+    brief stays in sweep mode).
     """
-    if discovery.lead_type:
-        return discovery.lead_type
     if discovery.brief:
         return canonical_category(discovery.brief) or ""
     return ""
@@ -415,17 +410,6 @@ def _brief_text(discovery) -> str:
     )
 
 
-def _filters_text(discovery: Discovery) -> str:
-    parts: list[str] = []
-    if discovery.industry:
-        parts.append(f"- Industry: {discovery.industry}")
-    if discovery.keywords:
-        parts.append(f"- Keywords: {', '.join(discovery.keywords)}")
-    if discovery.exclude_keywords:
-        parts.append(f"- Exclude: {', '.join(discovery.exclude_keywords)}")
-    return "\n".join(parts) if parts else "(no additional filters)"
-
-
 def _web_search_prompt_text() -> str:
     """Prompt block describing SearXNG web search when it is configured.
 
@@ -502,12 +486,12 @@ def build_agent(discovery: Discovery, job: Job, temperature: float = 0.0):
         user_id=discovery.user_id,
         job_id=job.id,
         category=_resolve_category(discovery),
-        location=discovery.location,
-        industry=discovery.industry,
-        keywords=list(discovery.keywords or []),
-        exclude_keywords=list(discovery.exclude_keywords or []),
+        location="",
+        industry=None,
+        keywords=[],
+        exclude_keywords=[],
         num_leads=discovery.num_leads,
-        country_code=infer_country_code(discovery.location),
+        country_code=None,
     )
 
     tools = build_tools(ctx)
@@ -516,11 +500,8 @@ def build_agent(discovery: Discovery, job: Job, temperature: float = 0.0):
     category = _resolve_category(discovery)
     system_prompt = ORCHESTRATOR_PROMPT.format(
         category=category or "the businesses described in the USER BRIEF",
-        location=discovery.location or "the location described in the USER BRIEF",
-        filters=_filters_text(discovery),
         brief=_brief_text(discovery),
         num_leads=discovery.num_leads,
-        exclude_keywords=", ".join(discovery.exclude_keywords or []) or "none",
         supported_categories=supported_categories(),
         web_search=_web_search_prompt_text(),
     )
@@ -555,7 +536,7 @@ def build_agent(discovery: Discovery, job: Job, temperature: float = 0.0):
             ),
             "system_prompt": DISCOVERY_SUBAGENT_PROMPT.format(
                 category=category or "the businesses described in the USER BRIEF",
-                location=discovery.location or "the location described in the USER BRIEF",
+                location="the location described in the USER BRIEF",
             ),
             "tools": [search_tool],
         }

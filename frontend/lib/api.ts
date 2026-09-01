@@ -90,15 +90,7 @@ export interface Discovery {
   id: number;
   user_id: number;
   name: string;
-  brief: string | null;
-  lead_type: string;
-  location: string;
-  industry: string | null;
-  company_size_min: number | null;
-  company_size_max: number | null;
-  target_roles: string[];
-  keywords: string[];
-  exclude_keywords: string[];
+  brief: string;
   num_leads: number;
   created_at: string;
   latest_job?: Job | null;
@@ -106,15 +98,7 @@ export interface Discovery {
 
 export interface DiscoveryCreateInput {
   name?: string;
-  brief?: string;
-  lead_type?: string;
-  location?: string;
-  industry?: string;
-  company_size_min?: number;
-  company_size_max?: number;
-  target_roles?: string[];
-  keywords?: string[];
-  exclude_keywords?: string[];
+  brief: string;
   num_leads?: number;
 }
 

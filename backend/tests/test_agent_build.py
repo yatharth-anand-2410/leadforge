@@ -41,11 +41,8 @@ def _discovery(**overrides):
     base = dict(
         id=1,
         user_id=1,
-        lead_type="Dental Clinics",
-        location="Bengaluru, India",
-        industry="Healthcare",
-        keywords=["implant", "orthodontist"],
-        exclude_keywords=["franchise"],
+        name="Dental Clinics in Bengaluru, India",
+        brief="Dental clinics in Bengaluru, India",
         num_leads=5,
     )
     base.update(overrides)
@@ -61,19 +58,21 @@ def test_build_agent_constructs(monkeypatch):
     agent, ctx = build_agent(_discovery(), _job())
 
     assert agent is not None
-    assert ctx.category == "Dental Clinics"
-    assert ctx.location == "Bengaluru, India"
+    assert ctx.category == "dental"
+    assert ctx.location == ""
     assert ctx.num_leads == 5
-    assert ctx.exclude_keywords == ["franchise"]
+    assert ctx.exclude_keywords == []
 
 
-def test_build_agent_handles_null_filters(monkeypatch):
+def test_build_agent_context_defaults_empty(monkeypatch):
+    """Structured form fields are gone: the context carries no keywords,
+    exclusions, or industry — the brief is the only ICP source."""
     monkeypatch.setattr("app.agent.agent.settings.groq_api_key", "dummy")
-    agent, ctx = build_agent(
-        _discovery(industry=None, keywords=None, exclude_keywords=None),
-        _job(),
-    )
+    agent, ctx = build_agent(_discovery(brief="Boutique gyms in Dubai"), _job())
     assert agent is not None
+    assert ctx.category == "gym"
+    assert ctx.industry is None
+    assert ctx.keywords == []
     assert ctx.exclude_keywords == []
 
 
@@ -99,7 +98,7 @@ def test_orchestrator_prompt_pins_single_category_icp():
 
 
 def test_brief_text_empty_without_brief():
-    assert _brief_text(_discovery()) == ""
+    assert _brief_text(_discovery(brief="")) == ""
 
 
 def test_brief_text_marks_brief_authoritative():
@@ -116,8 +115,8 @@ def test_task_text_uses_brief():
     assert "loyalty apps" in text
 
 
-def test_task_text_structured_without_brief():
-    text = _task_text(_discovery())
+def test_task_text_falls_back_to_name_without_brief():
+    text = _task_text(_discovery(brief=""))
     assert "Dental Clinics in Bengaluru, India" in text
 
 
@@ -125,25 +124,13 @@ def test_subagent_prompt_handles_non_supported_category():
     assert "closest supported category" in DISCOVERY_SUBAGENT_PROMPT
 
 
-def test_resolve_category_prefers_lead_type():
-    assert _resolve_category(_discovery()) == "Dental Clinics"
-
-
 def test_resolve_category_derives_from_brief():
-    d = _discovery(
-        lead_type="",
-        location="",
-        brief="I want dental clinics in new zealand that is looking for website development",
-    )
+    d = _discovery(brief="I want dental clinics in new zealand that is looking for website development")
     assert _resolve_category(d) == "dental"
 
 
 def test_resolve_category_empty_for_broad_brief():
-    d = _discovery(
-        lead_type="",
-        location="",
-        brief="SMEs looking for digital marketing and growth services",
-    )
+    d = _discovery(brief="SMEs looking for digital marketing and growth services")
     assert _resolve_category(d) == ""
 
 
@@ -162,8 +149,6 @@ def test_build_agent_brief_only_pins_category_and_brief(monkeypatch):
 
     monkeypatch.setattr("app.agent.agent.create_deep_agent", fake_create_deep_agent)
     d = _discovery(
-        lead_type="",
-        location="",
         brief="I want dental clinics in new zealand that is looking for website development",
     )
 
@@ -267,7 +252,8 @@ def test_summary_prompt_pins_task_and_keeps_placeholder(monkeypatch):
         mw for mw in captured["middleware"] if mw.name == "SummarizationMiddleware"
     )
     prompt = summarization._lc_helper.summary_prompt
-    assert "Run the lead discovery pipeline for: Dental Clinics in Bengaluru, India" in prompt
+    assert "Run the lead discovery pipeline for the following user brief" in prompt
+    assert "Dental clinics in Bengaluru, India" in prompt
     assert "Collect up to 5 shortlisted leads" in prompt
     assert "PIPELINE STATE" in prompt
     assert "{messages}" in prompt
@@ -276,7 +262,8 @@ def test_summary_prompt_pins_task_and_keeps_placeholder(monkeypatch):
 def test_pipeline_state_text_reflects_live_context(monkeypatch):
     """The injected pipeline state must come from AgentContext, not be guessed."""
     monkeypatch.setattr("app.agent.agent.settings.groq_api_key", "dummy")
-    _agent, ctx = build_agent(_discovery(exclude_keywords=["franchise", "chain"]), _job())
+    _agent, ctx = build_agent(_discovery(), _job())
+    ctx.exclude_keywords = ["franchise", "chain"]
 
     ctx.searched_categories.add("restaurant")
     ctx.searched_categories.add("cafe")

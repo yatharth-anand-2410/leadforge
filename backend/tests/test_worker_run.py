@@ -31,8 +31,7 @@ def _seed(run_session):
     disc = Discovery(
         user_id=1,
         name="Dental in Bengaluru",
-        lead_type="Dental Clinics",
-        location="Bengaluru, India",
+        brief="Dental clinics in Bengaluru, India",
         num_leads=3,
     )
     db.add(disc)
@@ -81,8 +80,7 @@ def _seed_no_leads(run_session):
     disc = Discovery(
         user_id=1,
         name="Dental in Bengaluru",
-        lead_type="Dental Clinics",
-        location="Bengaluru, India",
+        brief="Dental clinics in Bengaluru, India",
         num_leads=3,
     )
     db.add(disc)
