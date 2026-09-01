@@ -186,6 +186,9 @@ export const api = {
   runDiscovery: (discoveryId: number) =>
     apiFetch<Job>(`/discoveries/${discoveryId}/run`, { method: "POST" }),
 
+  deleteDiscovery: (discoveryId: number) =>
+    apiFetch<void>(`/discoveries/${discoveryId}`, { method: "DELETE" }),
+
   listLeads: (discoveryId: number, status?: string) =>
     apiFetch<Lead[]>(
       `/discoveries/${discoveryId}/leads${status ? `?status=${encodeURIComponent(status)}` : ""}`,

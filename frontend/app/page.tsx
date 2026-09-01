@@ -18,6 +18,8 @@ export default function Dashboard() {
   const router = useRouter();
   const [discoveries, setDiscoveries] = useState<Discovery[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -37,6 +39,19 @@ export default function Dashboard() {
         Loading…
       </main>
     );
+  }
+
+  async function deleteDiscovery(id: number) {
+    setDeleting(true);
+    try {
+      await api.deleteDiscovery(id);
+      setDiscoveries((prev) => (prev ? prev.filter((d) => d.id !== id) : prev));
+      setConfirmingId(null);
+    } catch (e: Error | unknown) {
+      setError(e instanceof Error ? e.message : "Failed to delete discovery");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -111,6 +126,31 @@ export default function Dashboard() {
                   {d.latest_job.status}
                 </span>
               ) : null}
+              {confirmingId === d.id ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    onClick={() => deleteDiscovery(d.id)}
+                    disabled={deleting}
+                    className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleting ? "Deleting…" : "Confirm"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmingId(null)}
+                    disabled={deleting}
+                    className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs transition-colors hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmingId(d.id)}
+                  className="shrink-0 text-sm text-red-600 transition-colors hover:text-red-700"
+                >
+                  Delete
+                </button>
+              )}
             </li>
           ))}
         </ul>

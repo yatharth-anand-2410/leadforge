@@ -5,6 +5,7 @@ from ..auth import get_current_user
 from ..db import get_db
 from ..models.discovery import Discovery
 from ..models.job import Job
+from ..models.lead import Lead
 from ..models.user import User
 from ..schemas.discovery import DiscoveryCreate, DiscoveryListItem, DiscoveryOut
 from ..schemas.job import JobOut
@@ -118,3 +119,16 @@ def run_discovery(
     db.commit()
     db.refresh(job)
     return job
+
+
+@router.delete("/{discovery_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_discovery(
+    discovery_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    discovery = _get_owned(discovery_id, user, db)
+    db.query(Job).filter(Job.discovery_id == discovery.id).delete()
+    db.query(Lead).filter(Lead.discovery_id == discovery.id).delete()
+    db.delete(discovery)
+    db.commit()
